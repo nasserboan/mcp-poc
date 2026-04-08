@@ -1,42 +1,44 @@
 import asyncio
-import warnings
+
 import mlflow
 from dotenv import load_dotenv
-from langchain.agents import create_agent
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
+from scenario_4_langgraph.graph import build_graph
+from scenario_4_langgraph.nodes import classify_route
 from shared.llm import get_llm
 from shared.questions import SCENARIO_QUESTIONS
 
 load_dotenv()
-mlflow.set_experiment("scenario_3_mcp")
+mlflow.set_experiment("scenario_4_langgraph_fixed")
 mlflow.langchain.autolog()
-
-warnings.filterwarnings(
-    "ignore",
-    message=".*Encountered unexpected error during autologging.*",
-)
 
 MCP_SERVER_URL = "http://localhost:8000/sse"
 
 
 async def run_all(questions: list[str]) -> list[str]:
+
+    ## connect to the MCP server and get the tools
     client = MultiServerMCPClient(
         {"poc-server": {"url": MCP_SERVER_URL, "transport": "sse"}}
     )
     tools = await client.get_tools()
-    print("=" * 60)
-    for tool in tools:
-        print(f"Tool name: {tool.name}")
-        print(f"Tool description: {tool.description}")
-        print(f"Tool args_schema: {tool.args_schema}")
-        print("=" * 60)
+
+    ## split the tools into data_mapping and general
+    data_mapping_tools = [tool for tool in tools if tool.name == "data_mapping"]
+    general_tools = [tool for tool in tools if tool.name != "data_mapping"]
+
+    ## build the graph
     llm = get_llm()
-    agent = create_agent(llm, tools=tools)
-    answers = []
+    app = build_graph(llm, data_mapping_tools, general_tools)
+
+    ## get the answers
+    answers: list[str] = []
     for question in questions:
-        result = await agent.ainvoke({"messages": [{"role": "user", "content": question}]})
-        answers.append(result["messages"][-1].content)
+        result = await app.ainvoke(
+            {"question": question, "route": classify_route(question), "answer": ""}
+        )
+        answers.append(result["answer"])
     return answers
 
 

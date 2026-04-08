@@ -1,8 +1,8 @@
 # MCP PoC
 
-Three scenarios that show how tool usage behavior changes depending on architecture.
+Four scenarios that show how tool usage behavior changes depending on architecture.
 
-## The Three Scenarios
+## The Four Scenarios
 
 ### Scenario 1 — Chain (no decision-making)
 
@@ -24,7 +24,8 @@ The LLM controls the flow.
 
 ### Scenario 3 — MCP Server + Client (tools as a service)
 
-A FastMCP server exposes **3 tools** (RAG search, live exchange rate, calculator)
+A FastMCP server exposes **4 tools** (`rag_search`, `get_exchange_rate`,
+`calculate`, `data_mapping`)
 via the Model Context Protocol. A separate LangGraph agent connects to the server
 at runtime and **discovers the tools automatically** — no tool is hardcoded in the
 client. The agent follows the same pattern as scenario 2, but its toolbox is
@@ -34,12 +35,23 @@ provided by an external server over the network.
 can connect and use the same server. The agent doesn't know what tools exist
 until it connects.
 
+### Scenario 4 — MCP + LangGraph router (split agent paths)
+
+Uses the same MCP server as scenario 3, but adds an explicit LangGraph routing
+step first. A conditional node classifies the question into:
+
+- **`data_mapping` path:** agent with only the `data_mapping` MCP tool
+- **`general` path:** agent with all other MCP tools
+
+**Key insight:** You keep MCP tool discovery and add deterministic orchestration
+on top, so specialization is controlled by graph design (not only by the LLM).
+
 ---
 
-## Execution model: how the three scenarios differ
+## Execution model: how the four scenarios differ
 
 The same high-level goal (answer questions with optional retrieval) is wired
-three different ways. These diagrams focus on **where control lives** and **how
+four different ways. These diagrams focus on **where control lives** and **how
 tools are bound** — not on MLflow or CLI details.
 
 ### Scenario 1 — Chain (fixed pipeline)
@@ -95,16 +107,30 @@ flowchart LR
     MCP <-->|"MCP / SSE"| S
 ```
 
+### Scenario 4 — MCP + LangGraph conditional routing
+
+The graph adds a **classifier/router node** before execution. It chooses one of
+two specialized agent nodes, each with a different MCP toolset.
+
+```mermaid
+flowchart TD
+    Q[Question] --> C["Classify: data mapping or general"]
+    C -->|"data_mapping"| DM["Agent + LLM with only data_mapping tool"]
+    C -->|"general"| G["Agent + LLM with all other MCP tools"]
+    DM --> A[Answer]
+    G --> A
+```
+
 
 
 **Summary**
 
 
-|                              | Scenario 1                  | Scenario 2                          | Scenario 3                                |
-| ---------------------------- | --------------------------- | ----------------------------------- | ----------------------------------------- |
-| **Who decides if RAG runs?** | Nobody — it always runs     | The LLM (via the agent)             | The LLM (via the agent)                   |
-| **Where do tools live?**     | Not tools — wired retriever | In-process Python callables         | Remote server; client discovers them      |
-| **Typical use**              | Predictable ETL-style flows | Flexible reasoning with local tools | Shareable, versioned tools across clients |
+|                              | Scenario 1                  | Scenario 2                          | Scenario 3                                | Scenario 4                                              |
+| ---------------------------- | --------------------------- | ----------------------------------- | ----------------------------------------- | ------------------------------------------------------- |
+| **Who decides path/toolset?**| Nobody — fixed chain        | The LLM (via the agent)             | The LLM (via the agent)                   | Graph conditional first, then agent inside each path    |
+| **Where do tools live?**     | Not tools — wired retriever | In-process Python callables         | Remote server; client discovers them      | Remote server; client discovers then splits by graph    |
+| **Typical use**              | Predictable ETL-style flows | Flexible reasoning with local tools | Shareable, versioned tools across clients | Tool specialization + deterministic routing constraints  |
 
 
 ---
@@ -170,6 +196,22 @@ uv run python scenario_3_mcp/server.py
 uv run python scenario_3_mcp/client.py
 ```
 
+### Scenario 4 — MCP + LangGraph conditional router
+
+Also uses **two terminals** (same server from scenario 3):
+
+**Terminal 1 — start the server:**
+
+```bash
+uv run python scenario_3_mcp/server.py
+```
+
+**Terminal 2 — run scenario 4 client graph:**
+
+```bash
+uv run python scenario_4_langgraph/main.py
+```
+
 ---
 
 ## Viewing Traces in MLflow
@@ -183,12 +225,13 @@ mlflow ui
 Open [http://localhost:5000](http://localhost:5000) in your browser.
 
 Each scenario has its own experiment (`scenario_1_chain`, `scenario_2_agent`,
-`scenario_3_mcp`). Click into a run to see which nodes executed, which tools were
+`scenario_3_mcp`, `scenario_4_langgraph_fixed`). Click into a run to see which nodes executed, which tools were
 called, the LLM input/output, and latency.
 
 **What to look for:**
 
 - Scenario 1: RAG always appears in the trace
 - Scenario 2: RAG appears only for research questions, not for simple ones
-- Scenario 3: Three different tools appear across three different runs
+- Scenario 3: MCP tool calls appear dynamically depending on the question set
+- Scenario 4: Router node picks one path; `data_mapping` requests stay isolated from the general toolset
 
