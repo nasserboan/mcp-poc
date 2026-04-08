@@ -1,0 +1,8 @@
+.env
+chroma_db/
+chorma_db/
+.venv/
+mlruns/
+__pycache__/
+*.pyc
+.python-version
