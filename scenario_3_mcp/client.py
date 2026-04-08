@@ -1,14 +1,3 @@
-"""
-Scenario 3 — MCP Client
-
-A LangGraph agent that connects to the MCP server at runtime.
-The agent has NO hardcoded tools — it discovers them from the server via MCP.
-
-Graph: START → agent → (tool_calls?) → tools → agent → ... → END
-       (identical to scenario 2, but tools come from the MCP server)
-
-Requires the MCP server (server.py) to be running before executing this script.
-"""
 import asyncio
 import mlflow
 from dotenv import load_dotenv
@@ -16,6 +5,7 @@ from langchain.agents import create_agent
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from shared.llm import get_llm
+from shared.questions import SCENARIO_QUESTIONS
 
 load_dotenv()
 mlflow.set_experiment("scenario_3_mcp")
@@ -29,6 +19,12 @@ async def run_all(questions: list[str]) -> list[str]:
         {"poc-server": {"url": MCP_SERVER_URL, "transport": "sse"}}
     )
     tools = await client.get_tools()
+    print("=" * 60)
+    for tool in tools:
+        print(f"Tool name: {tool.name}")
+        print(f"Tool description: {tool.description}")
+        print(f"Tool args_schema: {tool.args_schema}")
+        print("=" * 60)
     llm = get_llm()
     agent = create_agent(llm, tools=tools)
     answers = []
@@ -39,13 +35,8 @@ async def run_all(questions: list[str]) -> list[str]:
 
 
 if __name__ == "__main__":
-    questions = [
-        "What does the literature say about LLM agent tool use?",  # → rag_search
-        "What is the exchange rate from USD to BRL today?",         # → get_exchange_rate
-        "What is 1337 * 42?",                                       # → calculate
-    ]
-    answers = asyncio.run(run_all(questions))
-    for q, a in zip(questions, answers):
+    answers = asyncio.run(run_all(SCENARIO_QUESTIONS))
+    for q, a in zip(SCENARIO_QUESTIONS, answers):
         print(f"Q: {q}")
         print(f"A: {a}")
         print("=" * 60)

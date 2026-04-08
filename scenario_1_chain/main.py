@@ -4,6 +4,7 @@ Scenario 1 — LangChain Chain
 The RAG retriever is hardwired into the chain.
 It ALWAYS runs, regardless of the question.
 The LLM has no choice — it receives the retrieved context every time.
+Uses the same demo questions as the other scenarios (RAG still runs for every one).
 """
 import mlflow
 from dotenv import load_dotenv
@@ -12,6 +13,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 
 from shared.llm import get_llm
+from shared.questions import SCENARIO_QUESTIONS
 from shared.rag import get_retriever
 
 load_dotenv()
@@ -40,11 +42,7 @@ def run(question: str) -> str:
 
 
 if __name__ == "__main__":
-    questions = [
-        "What are the main challenges in building LLM agents?",
-        "What is the capital of France?",  # RAG still runs even for this
-    ]
-    for q in questions:
+    for q in SCENARIO_QUESTIONS:
         print(f"Q: {q}")
         print(f"A: {run(q)}")
         print("=" * 60)

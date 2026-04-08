@@ -1,17 +1,9 @@
-"""
-Scenario 2 — LangGraph Agent
-
-The LLM has the RAG tool available but decides whether to use it.
-Graph: START → agent → (tool_calls?) → tools → agent → ... → END
-
-The agent calls RAG only when it judges the tool is needed.
-Compare MLflow traces between a research question and a simple question.
-"""
 import mlflow
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 
 from shared.llm import get_llm
+from shared.questions import SCENARIO_QUESTIONS
 from shared.rag import rag_search
 
 load_dotenv()
@@ -27,11 +19,7 @@ def run(question: str) -> str:
 
 
 if __name__ == "__main__":
-    questions = [
-        "What does the literature say about LLM agent memory?",  # Should trigger RAG
-        "What is the capital of France?",                         # Should NOT trigger RAG
-    ]
-    for q in questions:
+    for q in SCENARIO_QUESTIONS:
         print(f"Q: {q}")
         print(f"A: {run(q)}")
         print("=" * 60)
